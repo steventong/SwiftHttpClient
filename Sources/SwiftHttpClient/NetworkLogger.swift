@@ -56,57 +56,62 @@ public enum NetworkLogger {
         error: Error?
     ) {
         let durationStr = String(format: "%.3f", duration)
-        let statusEmoji: String
+        let statusMark: String
         let statusText: String
 
         if error != nil {
-            statusEmoji = "FAIL"
+            statusMark = "FAIL"
             statusText = "ERROR"
         } else if let code = statusCode {
-            statusEmoji = (200 ... 299).contains(code) ? "OK" : "FAIL"
+            statusMark = (200 ... 299).contains(code) ? "OK" : "FAIL"
             statusText = "\(code)"
         } else {
-            statusEmoji = "UNKNOWN"
+            statusMark = "UNKNOWN"
             statusText = "?"
         }
 
-        var log = "\n[HTTP] [\(method)] [\(statusEmoji)] [\(statusText)] [\(durationStr)s]"
-        log += "\nURL: \(url.absoluteString)"
+        var lines: [String] = []
+        lines.append("")
+        lines.append("[HTTP] \(method) \(url.absoluteString)")
+        lines.append("Summary: status=\(statusText) result=\(statusMark) duration=\(durationStr)s")
 
         if let reqHeaders = requestHeaders, !reqHeaders.isEmpty {
-            log += "\nRequest Headers:"
-            for (key, value) in reqHeaders {
-                log += "\n  \(key): \(value)"
+            lines.append("Request Headers:")
+            for (key, value) in reqHeaders.sorted(by: { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }) {
+                lines.append("  - \(key): \(value)")
             }
         }
 
         if let body = requestBody, let bodyString = String(data: body, encoding: .utf8) {
-            log += "\nRequest Body: \(bodyString)"
+            lines.append("Request Body:")
+            lines.append(bodyString)
         }
 
         if let error = error {
-            log += "\nError: \(error.localizedDescription)"
-            log += "\nDetails: \(error)"
-            Logger.error(log)
+            lines.append("Error: \(error.localizedDescription)")
+            lines.append("Details: \(error)")
+            Logger.error(lines.joined(separator: "\n"))
             return
         }
 
         if let respHeaders = responseHeaders, !respHeaders.isEmpty {
-            log += "\nResponse Headers:"
-            for (key, value) in respHeaders {
-                log += "\n  \(key): \(value)"
+            lines.append("Response Headers:")
+            for (key, value) in respHeaders.sorted(by: { "\($0.key)".localizedCaseInsensitiveCompare("\($1.key)") == .orderedAscending }) {
+                lines.append("  - \(key): \(value)")
             }
         }
 
         if let data = responseData {
             if let prettyJSON = prettyPrintJSON(data) {
-                log += "\nResponse Body:\n\(prettyJSON)"
+                lines.append("Response Body:")
+                lines.append(prettyJSON)
             } else if let bodyString = String(data: data, encoding: .utf8) {
-                log += "\nResponse Body: \(bodyString)"
+                lines.append("Response Body:")
+                lines.append(bodyString)
             }
         }
 
-        Logger.debug(log)
+        Logger.debug(lines.joined(separator: "\n"))
     }
 
     /// Pretty-prints JSON payloads when possible for readable output.
