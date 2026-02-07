@@ -2,11 +2,24 @@ import Foundation
 
 /// A lightweight async HTTP client with typed decoding helpers.
 public final class HTTPClient {
-    private let session: URLSession
+    private struct ManagedSessionConfig {
+        var timeoutIntervalForRequest: TimeInterval
+        var timeoutIntervalForResource: TimeInterval
+        var trustedSSLDomain: String?
+    }
+
+    private let lock = NSLock()
+    private var session: URLSession
+    private var managedSessionConfig: ManagedSessionConfig?
 
     /// Creates a client with request timeout.
     /// - Parameter timeout: Timeout for each request in seconds.
     public init(timeout: TimeInterval = 10) {
+        self.managedSessionConfig = ManagedSessionConfig(
+            timeoutIntervalForRequest: timeout,
+            timeoutIntervalForResource: 10,
+            trustedSSLDomain: nil
+        )
         self.session = URLSessionFactory.createSession(timeoutIntervalForRequest: timeout)
     }
 
@@ -15,6 +28,11 @@ public final class HTTPClient {
     ///   - timeout: Timeout for each request in seconds.
     ///   - trustedSSLDomain: Domain whose server trust will be accepted by `URLSessionFactory`.
     public init(timeout: TimeInterval = 10, trustedSSLDomain: String?) {
+        self.managedSessionConfig = ManagedSessionConfig(
+            timeoutIntervalForRequest: timeout,
+            timeoutIntervalForResource: 10,
+            trustedSSLDomain: trustedSSLDomain
+        )
         self.session = URLSessionFactory.createSession(
             timeoutIntervalForRequest: timeout,
             trustedSSLDomain: trustedSSLDomain
@@ -23,12 +41,33 @@ public final class HTTPClient {
 
     /// Creates a client from an injected session (for custom config or testing).
     public init(session: URLSession) {
+        self.managedSessionConfig = nil
         self.session = session
     }
 
     /// Sends a raw request and returns unprocessed data + response.
     public func send(_ request: URLRequest) async throws -> (Data, URLResponse) {
-        try await NetworkLogger.execute(request: request, session: session)
+        try await NetworkLogger.execute(request: request, session: currentSession)
+    }
+
+    /// Updates trusted SSL domain at runtime by rebuilding the managed `URLSession`.
+    /// - Parameter domain: Domain to trust. Pass `nil` to disable custom trust.
+    public func updateTrustedSSLDomain(_ domain: String?) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard var config = managedSessionConfig else {
+            Logger.warn("HTTPClient#updateTrustedSSLDomain ignored: client was initialized with custom session")
+            return
+        }
+
+        config.trustedSSLDomain = domain
+        managedSessionConfig = config
+        session = URLSessionFactory.createSession(
+            timeoutIntervalForRequest: config.timeoutIntervalForRequest,
+            timeoutIntervalForResource: config.timeoutIntervalForResource,
+            trustedSSLDomain: config.trustedSSLDomain
+        )
     }
 
     /// Sends a `GET` request and decodes JSON response.
@@ -90,5 +129,11 @@ public final class HTTPClient {
         } catch {
             throw HTTPClientError.decodingFailed(message: error.localizedDescription)
         }
+    }
+
+    private var currentSession: URLSession {
+        lock.lock()
+        defer { lock.unlock() }
+        return session
     }
 }

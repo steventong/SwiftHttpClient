@@ -126,6 +126,14 @@ do {
 let client = HTTPClient(timeout: 15, trustedSSLDomain: "api.example.com")
 ```
 
+也可以在运行时动态更新：
+
+```swift
+let client = HTTPClient(timeout: 15)
+client.updateTrustedSSLDomain("api.example.com") // 启用
+client.updateTrustedSSLDomain(nil)               // 关闭
+```
+
 注意：该能力会放宽该域名的证书校验，仅建议在可控环境（如测试环境）使用。
 
 ## 许可证
