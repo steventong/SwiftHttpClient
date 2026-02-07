@@ -1,6 +1,8 @@
 import Foundation
 
+/// Logs request and response details for network execution.
 public enum NetworkLogger {
+    /// Executes request with timing/logging and rethrows any network error.
     public static func execute(request: URLRequest, session: URLSession = .shared) async throws -> (Data, URLResponse) {
         let startTime = Date()
         let url = request.url ?? URL(string: "unknown://url")!
@@ -107,6 +109,7 @@ public enum NetworkLogger {
         Logger.debug(log)
     }
 
+    /// Pretty-prints JSON payloads when possible for readable output.
     private static func prettyPrintJSON(_ data: Data) -> String? {
         guard let json = try? JSONSerialization.jsonObject(with: data, options: []),
               let prettyData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted),

@@ -1,6 +1,7 @@
 import Foundation
 import OSLog
 
+/// Minimal wrapper around `OSLog` for this package.
 public final class Logger {
     private static let osLog = OSLog(subsystem: "me.itwl.SwiftHttpClient", category: "SwiftHttpClient")
 

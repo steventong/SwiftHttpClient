@@ -1,12 +1,19 @@
 import Foundation
 
+/// A lightweight async HTTP client with typed decoding helpers.
 public final class HTTPClient {
     private let session: URLSession
 
+    /// Creates a client with request timeout.
+    /// - Parameter timeout: Timeout for each request in seconds.
     public init(timeout: TimeInterval = 10) {
         self.session = URLSessionFactory.createSession(timeoutIntervalForRequest: timeout)
     }
 
+    /// Creates a client with request timeout and optional SSL trusted domain.
+    /// - Parameters:
+    ///   - timeout: Timeout for each request in seconds.
+    ///   - trustedSSLDomain: Domain whose server trust will be accepted by `URLSessionFactory`.
     public init(timeout: TimeInterval = 10, trustedSSLDomain: String?) {
         self.session = URLSessionFactory.createSession(
             timeoutIntervalForRequest: timeout,
@@ -14,14 +21,17 @@ public final class HTTPClient {
         )
     }
 
+    /// Creates a client from an injected session (for custom config or testing).
     public init(session: URLSession) {
         self.session = session
     }
 
+    /// Sends a raw request and returns unprocessed data + response.
     public func send(_ request: URLRequest) async throws -> (Data, URLResponse) {
         try await NetworkLogger.execute(request: request, session: session)
     }
 
+    /// Sends a `GET` request and decodes JSON response.
     public func get<T: Decodable>(url: URL, headers: [String: String]? = nil) async throws -> T {
         var request = URLRequest(url: url)
         request.httpMethod = HTTPMethod.get.rawValue
@@ -29,6 +39,7 @@ public final class HTTPClient {
         return try await sendAndDecode(request)
     }
 
+    /// Sends a `POST` request with `application/x-www-form-urlencoded` body and decodes JSON response.
     public func post<T: Decodable>(url: URL, parameters: [String: Any], headers: [String: String]? = nil) async throws -> T {
         var request = URLRequest(url: url)
         request.httpMethod = HTTPMethod.post.rawValue
@@ -38,6 +49,7 @@ public final class HTTPClient {
         return try await sendAndDecode(request)
     }
 
+    /// Sends a `POST` request with JSON body and decodes JSON response.
     public func postJSON<T: Decodable, Body: Encodable>(url: URL, body: Body, headers: [String: String]? = nil) async throws -> T {
         var request = URLRequest(url: url)
         request.httpMethod = HTTPMethod.post.rawValue
@@ -47,6 +59,7 @@ public final class HTTPClient {
         return try await sendAndDecode(request)
     }
 
+    /// Checks URL reachability by sending a `GET` and validating `2xx` status code.
     public func check(url: URL) async -> Bool {
         var request = URLRequest(url: url)
         request.httpMethod = HTTPMethod.get.rawValue
@@ -60,6 +73,7 @@ public final class HTTPClient {
         }
     }
 
+    /// Shared decode path for high-level helpers.
     private func sendAndDecode<T: Decodable>(_ request: URLRequest) async throws -> T {
         let (data, response) = try await send(request)
 
