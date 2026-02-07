@@ -138,4 +138,5 @@ client.updateTrustedSSLDomain(nil)               // 关闭
 
 ## 许可证
 
-请根据你的项目需求补充许可证信息。
+本项目使用 [MIT License](https://opensource.org/licenses/MIT)。
+详见 `/Users/tongwanglin/Workspace/XcodeProjects/SwiftHttpClient/LICENSE`。
