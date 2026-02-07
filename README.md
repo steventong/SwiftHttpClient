@@ -16,7 +16,7 @@
 在 `Package.swift` 中添加依赖：
 
 ```swift
-.package(url: "<your-repo-url>", from: "1.0.0")
+.package(url: "https://github.com/steventong/SwiftHttpClient", branch: "main")
 ```
 
 并在目标中引入：
