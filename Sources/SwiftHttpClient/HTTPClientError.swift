@@ -8,6 +8,8 @@ public enum HTTPClientError: Error, LocalizedError, Sendable {
     case httpStatus(code: Int)
     /// JSON decoding failed with underlying reason.
     case decodingFailed(message: String)
+    /// Server certificate is not trusted and requires an explicit decision.
+    case serverCertificateUntrusted(ServerCertificateInfo)
 
     public var errorDescription: String? {
         switch self {
@@ -17,6 +19,8 @@ public enum HTTPClientError: Error, LocalizedError, Sendable {
             return "Invalid http status code: \(code)"
         case let .decodingFailed(message):
             return "Failed to decode response: \(message)"
+        case let .serverCertificateUntrusted(certificate):
+            return "The certificate presented by \(certificate.host) is not trusted."
         }
     }
 }

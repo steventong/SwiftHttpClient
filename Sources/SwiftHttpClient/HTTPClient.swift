@@ -5,69 +5,85 @@ public final class HTTPClient {
     private struct ManagedSessionConfig {
         var timeoutIntervalForRequest: TimeInterval
         var timeoutIntervalForResource: TimeInterval
-        var trustedSSLDomain: String?
+        var serverTrustPolicy: ServerTrustPolicy
     }
 
     private let lock = NSLock()
     private var session: URLSession
+    private var trustDelegate: SSLTrustDelegate?
     private var managedSessionConfig: ManagedSessionConfig?
 
     /// Creates a client with request timeout.
     /// - Parameter timeout: Timeout for each request in seconds.
     public init(timeout: TimeInterval = 10) {
-        self.managedSessionConfig = ManagedSessionConfig(
+        let managedSession = URLSessionFactory.createManagedSession(
+            timeoutIntervalForRequest: timeout
+        )
+        managedSessionConfig = ManagedSessionConfig(
             timeoutIntervalForRequest: timeout,
             timeoutIntervalForResource: 10,
-            trustedSSLDomain: nil
+            serverTrustPolicy: .system
         )
-        self.session = URLSessionFactory.createSession(timeoutIntervalForRequest: timeout)
+        session = managedSession.session
+        trustDelegate = managedSession.trustDelegate
     }
 
-    /// Creates a client with request timeout and optional SSL trusted domain.
+    /// Creates a client with request timeout and request-scoped server trust policy.
     /// - Parameters:
     ///   - timeout: Timeout for each request in seconds.
-    ///   - trustedSSLDomain: Domain whose server trust will be accepted by `URLSessionFactory`.
-    public init(timeout: TimeInterval = 10, trustedSSLDomain: String?) {
-        self.managedSessionConfig = ManagedSessionConfig(
+    ///   - serverTrustPolicy: Certificate validation and user-approved fingerprint policy.
+    public init(timeout: TimeInterval = 10, serverTrustPolicy: ServerTrustPolicy) {
+        let managedSession = URLSessionFactory.createManagedSession(
+            timeoutIntervalForRequest: timeout,
+            serverTrustPolicy: serverTrustPolicy
+        )
+        managedSessionConfig = ManagedSessionConfig(
             timeoutIntervalForRequest: timeout,
             timeoutIntervalForResource: 10,
-            trustedSSLDomain: trustedSSLDomain
+            serverTrustPolicy: serverTrustPolicy
         )
-        self.session = URLSessionFactory.createSession(
-            timeoutIntervalForRequest: timeout,
-            trustedSSLDomain: trustedSSLDomain
-        )
+        session = managedSession.session
+        trustDelegate = managedSession.trustDelegate
     }
 
     /// Creates a client from an injected session (for custom config or testing).
     public init(session: URLSession) {
-        self.managedSessionConfig = nil
+        managedSessionConfig = nil
         self.session = session
+        trustDelegate = nil
     }
 
     /// Sends a raw request and returns unprocessed data + response.
     public func send(_ request: URLRequest) async throws -> (Data, URLResponse) {
-        try await NetworkLogger.execute(request: request, session: currentSession)
+        do {
+            return try await NetworkLogger.execute(request: request, session: currentSession)
+        } catch {
+            if let certificate = currentTrustDelegate?.consumeCertificateFailure() {
+                throw HTTPClientError.serverCertificateUntrusted(certificate)
+            }
+            throw error
+        }
     }
 
-    /// Updates trusted SSL domain at runtime by rebuilding the managed `URLSession`.
-    /// - Parameter domain: Domain to trust. Pass `nil` to disable custom trust.
-    public func updateTrustedSSLDomain(_ domain: String?) {
+    /// Updates server trust policy at runtime by rebuilding the managed `URLSession`.
+    public func updateServerTrustPolicy(_ policy: ServerTrustPolicy) {
         lock.lock()
         defer { lock.unlock() }
 
         guard var config = managedSessionConfig else {
-            Logger.warn("HTTPClient#updateTrustedSSLDomain ignored: client was initialized with custom session")
+            Logger.warn("HTTPClient#updateServerTrustPolicy ignored: client was initialized with custom session")
             return
         }
 
-        config.trustedSSLDomain = domain
+        config.serverTrustPolicy = policy
         managedSessionConfig = config
-        session = URLSessionFactory.createSession(
+        let managedSession = URLSessionFactory.createManagedSession(
             timeoutIntervalForRequest: config.timeoutIntervalForRequest,
             timeoutIntervalForResource: config.timeoutIntervalForResource,
-            trustedSSLDomain: config.trustedSSLDomain
+            serverTrustPolicy: config.serverTrustPolicy
         )
+        session = managedSession.session
+        trustDelegate = managedSession.trustDelegate
     }
 
     /// Sends a `GET` request and decodes JSON response.
@@ -135,5 +151,11 @@ public final class HTTPClient {
         lock.lock()
         defer { lock.unlock() }
         return session
+    }
+
+    private var currentTrustDelegate: SSLTrustDelegate? {
+        lock.lock()
+        defer { lock.unlock() }
+        return trustDelegate
     }
 }

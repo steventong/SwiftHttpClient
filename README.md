@@ -118,23 +118,33 @@ do {
 - 请求耗时
 - 异常详情
 
-## SSL 信任域名
+## 自签名证书确认
 
-如需对某个域名启用自定义信任，可使用：
-
-```swift
-let client = HTTPClient(timeout: 15, trustedSSLDomain: "api.example.com")
-```
-
-也可以在运行时动态更新：
+默认使用系统证书校验。需要支持用户确认后的自签名证书时，传入已批准的
+SHA-256 证书指纹：
 
 ```swift
-let client = HTTPClient(timeout: 15)
-client.updateTrustedSSLDomain("api.example.com") // 启用
-client.updateTrustedSSLDomain(nil)               // 关闭
+let client = HTTPClient(
+    timeout: 15,
+    serverTrustPolicy: .userApprovedCertificate(
+        host: "nas.local",
+        sha256Fingerprint: approvedFingerprint
+    )
+)
 ```
 
-注意：该能力会放宽该域名的证书校验，仅建议在可控环境（如测试环境）使用。
+如果系统不信任证书且指纹尚未批准，请求会抛出
+`HTTPClientError.serverCertificateUntrusted`，其中包含 host、证书主题和 SHA-256 指纹。
+用户确认后可更新策略并重试：
+
+```swift
+client.updateServerTrustPolicy(
+    .userApprovedCertificate(
+        host: certificate.host,
+        sha256Fingerprint: certificate.sha256Fingerprint
+    )
+)
+```
 
 ## 许可证
 
