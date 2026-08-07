@@ -44,6 +44,70 @@ public enum NetworkLogger {
         }
     }
 
+    /// Executes a download request with timing/logging and preserves the file.
+    public static func download(
+        request: URLRequest,
+        session: URLSession = .shared
+    ) async throws -> (URL, URLResponse) {
+        let startTime = Date()
+        let url = request.url ?? URL(string: "unknown://url")!
+        let method = request.httpMethod ?? "GET"
+
+        do {
+            let result = try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<(URL, URLResponse), Error>) in
+                session.downloadTask(with: request) { temporaryURL, response, error in
+                    do {
+                        if let error {
+                            throw error
+                        }
+                        guard let temporaryURL, let response else {
+                            throw URLError(.badServerResponse)
+                        }
+
+                        let destination = FileManager.default.temporaryDirectory
+                            .appendingPathComponent("swift-http-download-\(UUID().uuidString)")
+                        try FileManager.default.moveItem(
+                            at: temporaryURL,
+                            to: destination
+                        )
+                        continuation.resume(returning: (destination, response))
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
+                }.resume()
+            }
+            let duration = Date().timeIntervalSince(startTime)
+            let httpResponse = result.1 as? HTTPURLResponse
+            logCombined(
+                url: url,
+                method: method,
+                requestHeaders: request.allHTTPHeaderFields,
+                requestBody: request.httpBody,
+                statusCode: httpResponse?.statusCode,
+                responseHeaders: httpResponse?.allHeaderFields,
+                responseData: nil,
+                duration: duration,
+                error: nil
+            )
+            return result
+        } catch {
+            let duration = Date().timeIntervalSince(startTime)
+            logCombined(
+                url: url,
+                method: method,
+                requestHeaders: request.allHTTPHeaderFields,
+                requestBody: request.httpBody,
+                statusCode: nil,
+                responseHeaders: nil,
+                responseData: nil,
+                duration: duration,
+                error: error
+            )
+            throw error
+        }
+    }
+
     private static func logCombined(
         url: URL,
         method: String,

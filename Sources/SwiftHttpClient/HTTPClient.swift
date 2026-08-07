@@ -65,6 +65,24 @@ public final class HTTPClient {
         }
     }
 
+    /// Downloads a response body to a caller-owned temporary file.
+    ///
+    /// The file is moved out of URLSession's transient download location before
+    /// this method returns. The caller is responsible for removing it.
+    public func download(_ request: URLRequest) async throws -> (URL, URLResponse) {
+        do {
+            return try await NetworkLogger.download(
+                request: request,
+                session: currentSession
+            )
+        } catch {
+            if let certificate = currentTrustDelegate?.consumeCertificateFailure() {
+                throw HTTPClientError.serverCertificateUntrusted(certificate)
+            }
+            throw error
+        }
+    }
+
     /// Updates server trust policy at runtime by rebuilding the managed `URLSession`.
     public func updateServerTrustPolicy(_ policy: ServerTrustPolicy) {
         lock.lock()
