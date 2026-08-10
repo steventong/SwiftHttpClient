@@ -2,9 +2,13 @@ import Foundation
 
 /// Utilities for URL form encoding.
 public enum URLCoding {
-    /// Percent-encodes query component text.
+    private static let formComponentAllowedCharacters = CharacterSet(
+        charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._*"
+    )
+
+    /// Percent-encodes one `application/x-www-form-urlencoded` component.
     public static func encode(_ value: String) -> String {
-        value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+        value.addingPercentEncoding(withAllowedCharacters: formComponentAllowedCharacters) ?? value
     }
 }
 
