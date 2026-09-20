@@ -25,6 +25,7 @@ public final class Logger {
 
     private static func log(_ message: String, type: OSLogType, filePath: String, fileNumber: Int) {
         let swiftFileName = (filePath as NSString).lastPathComponent
-        os_log("[%{public}@:%{public}d] %{public}@", log: osLog, type: type, swiftFileName, fileNumber, message)
+        let entry = "[\(swiftFileName):\(fileNumber)] \(message)"
+        os_log("%{public}@", log: osLog, type: type, entry as NSString)
     }
 }
