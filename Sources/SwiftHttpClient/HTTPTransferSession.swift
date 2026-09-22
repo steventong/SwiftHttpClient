@@ -28,6 +28,7 @@ public final class HTTPTransferTask: @unchecked Sendable {
         }
     }
     public func resume() { native.resume() }
+    public func suspend() { native.suspend() }
     public func cancel() { native.cancel() }
     public func cancelProducingResumeData(_ completion: @escaping @Sendable (Data?) -> Void) {
         guard let download = native as? URLSessionDownloadTask else { preconditionFailure("Only file downloads have resume data") }
