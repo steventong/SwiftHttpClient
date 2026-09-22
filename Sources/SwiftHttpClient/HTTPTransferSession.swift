@@ -104,12 +104,8 @@ private final class TransferDelegate: NSObject, URLSessionDataDelegate, URLSessi
         return task
     }
 
-    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge,
-                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        let decision = ServerTrustEvaluator.evaluate(challenge.protectionSpace, policy: policy(challenge.protectionSpace.host))
-        // Connection-level rejections remain Foundation TLS errors; do not assign one connection's certificate to other tasks.
-        completionHandler(decision.disposition, decision.credential)
-    }
+    // Without a connection-level handler, Foundation delivers trust challenges here,
+    // so a rejection can retain the certificate on its exact task rather than becoming cancellation.
     func urlSession(_ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge,
                     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         let decision = ServerTrustEvaluator.evaluate(challenge.protectionSpace, policy: policy(challenge.protectionSpace.host))

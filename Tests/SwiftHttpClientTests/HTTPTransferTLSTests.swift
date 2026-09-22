@@ -34,6 +34,15 @@ final class HTTPTransferTLSTests: XCTestCase {
             } else {
                 XCTAssertNotNil(error)
                 XCTAssertTrue(data.isEmpty)
+                if host == "127.0.0.1" {
+                    guard let error, case let HTTPClientError.serverCertificateUntrusted(certificate) = error else {
+                        XCTFail("Certificate rejection must retain its task-scoped identity, not become cancellation")
+                        session.invalidateAndCancel()
+                        continue
+                    }
+                    XCTAssertEqual(certificate.host, host)
+                    XCTAssertEqual(certificate.sha256Fingerprint, server.fingerprint)
+                }
             }
             session.invalidateAndCancel()
         }
