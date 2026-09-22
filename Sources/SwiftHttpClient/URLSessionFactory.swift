@@ -1,6 +1,4 @@
-import CryptoKit
 import Foundation
-import Security
 
 /// Builds configured `URLSession` instances for `HTTPClient`.
 public enum URLSessionFactory {
@@ -74,59 +72,12 @@ final class SSLTrustDelegate: NSObject, URLSessionDelegate {
     func urlSession(_ session: URLSession,
                     didReceive challenge: URLAuthenticationChallenge,
                     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-              let serverTrust = challenge.protectionSpace.serverTrust else {
-            completionHandler(.performDefaultHandling, nil)
-            return
+        let decision = ServerTrustEvaluator.evaluate(challenge.protectionSpace, policy: policy)
+        if let failure = decision.failure {
+            lock.lock()
+            certificateFailure = failure
+            lock.unlock()
         }
-
-        guard case let .userApprovedCertificate(expectedHost, approvedFingerprint) = policy,
-              challenge.protectionSpace.host.caseInsensitiveCompare(expectedHost) == .orderedSame
-        else {
-            completionHandler(.performDefaultHandling, nil)
-            return
-        }
-
-        if SecTrustEvaluateWithError(serverTrust, nil) {
-            completionHandler(.useCredential, URLCredential(trust: serverTrust))
-            return
-        }
-
-        guard let certificate = certificateInfo(
-            trust: serverTrust,
-            host: challenge.protectionSpace.host
-        ) else {
-            completionHandler(.cancelAuthenticationChallenge, nil)
-            return
-        }
-
-        if let approvedFingerprint,
-           approvedFingerprint.caseInsensitiveCompare(certificate.sha256Fingerprint) == .orderedSame {
-            completionHandler(.useCredential, URLCredential(trust: serverTrust))
-            return
-        }
-
-        lock.lock()
-        certificateFailure = certificate
-        lock.unlock()
-        completionHandler(.cancelAuthenticationChallenge, nil)
-    }
-
-    private func certificateInfo(trust: SecTrust, host: String) -> ServerCertificateInfo? {
-        guard let certificate = SecTrustGetCertificateAtIndex(trust, 0) else {
-            return nil
-        }
-
-        let data = SecCertificateCopyData(certificate) as Data
-        let digest = SHA256.hash(data: data)
-        let fingerprint = digest
-            .map { String(format: "%02X", $0) }
-            .joined(separator: ":")
-
-        return ServerCertificateInfo(
-            host: host,
-            subject: SecCertificateCopySubjectSummary(certificate) as String? ?? host,
-            sha256Fingerprint: fingerprint
-        )
+        completionHandler(decision.disposition, decision.credential)
     }
 }
